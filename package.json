@@ -1,0 +1,20 @@
+{
+  "name": "inventory-app",
+  "version": "1.0.0",
+  "description": "Inventory Management System",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "client": "npm --prefix client run dev",
+    "build": "npm --prefix client run build",
+    "dev:all": "node scripts/dev.js",
+    "db:init": "node db/init.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.18.2",
+    "mysql2": "^3.9.2"
+  }
+}
