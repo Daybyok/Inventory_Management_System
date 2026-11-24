@@ -1005,13 +1005,23 @@ async function start() {
   await connectDB();
   await ensureDefaultAccounts();
 
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, () => {
     console.log(`\nInventory App server running on http://localhost:${PORT}`);
     console.log(`API base: http://localhost:${PORT}/api`);
     console.log(`Health:   http://localhost:${PORT}/api/health`);
     if (!isProduction) {
       console.log('Dev client: http://localhost:5173 (run "npm run client" in another terminal)\n');
     }
+  });
+
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.error(`\nPort ${PORT} is already in use.`);
+      console.error('Stop the other server or set PORT to a different value in .env.\n');
+    } else {
+      console.error('\nServer error:', err.message);
+    }
+    process.exit(1);
   });
 }
 

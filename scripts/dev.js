@@ -1,8 +1,15 @@
 const { spawn } = require('child_process');
+const fs = require('fs');
 const path = require('path');
 
 const rootDir = path.join(__dirname, '..');
-const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
+const clientDir = path.join(rootDir, 'client');
+const viteBin = path.join(clientDir, 'node_modules', 'vite', 'bin', 'vite.js');
+
+if (!fs.existsSync(viteBin)) {
+  console.error('Client dependencies are not installed. Run: npm --prefix client install');
+  process.exit(1);
+}
 
 const children = [
   spawn(process.execPath, [path.join(rootDir, 'server.js')], {
@@ -10,10 +17,9 @@ const children = [
     stdio: 'inherit',
     env: process.env,
   }),
-  spawn(npmCommand, ['--prefix', path.join(rootDir, 'client'), 'run', 'dev'], {
-    cwd: rootDir,
+  spawn(process.execPath, [viteBin], {
+    cwd: clientDir,
     stdio: 'inherit',
-    shell: process.platform === 'win32',
     env: process.env,
   }),
 ];
