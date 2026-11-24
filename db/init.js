@@ -4,7 +4,23 @@ const fs = require('fs');
 const path = require('path');
 const mysql = require('mysql2/promise');
 
-const DB_NAME = process.env.DB_NAME || 'inventory_db';
+const DB_NAME = (process.env.DB_NAME || 'inventory_db').replace(/`/g, '');
+const ssl = process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : undefined;
+
+const baseConfig = {
+  host: process.env.DB_HOST || 'localhost',
+  port: parseInt(process.env.DB_PORT, 10) || 3306,
+  user: process.env.DB_USER || 'root',
+  password: process.env.DB_PASSWORD || '',
+  ...(ssl ? { ssl } : {}),
+  multipleStatements: true,
+};
+
+function stripDatabaseStatements(sql) {
+  return sql
+    .replace(/CREATE\s+DATABASE[\s\S]*?;\s*/i, '')
+    .replace(/USE\s+`?[A-Za-z0-9_$-]+`?\s*;\s*/i, '');
+}
 
 async function hasUniqueIndex(connection, table, column) {
   const [rows] = await connection.query(
@@ -64,31 +80,29 @@ async function migrateExistingData(connection) {
 }
 
 async function main() {
-  const schemaPath = path.join(__dirname, 'schema.sql');
-  const sql = fs
-    .readFileSync(schemaPath, 'utf8')
-    .split('inventory_db')
-    .join(DB_NAME.replace(/`/g, ''));
-
-  const connection = await mysql.createConnection({
-    host: process.env.DB_HOST || 'localhost',
-    port: parseInt(process.env.DB_PORT, 10) || 3306,
-    user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || '',
-    multipleStatements: true,
-  });
+  const schema = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
+  const targetedSchema = schema.split('inventory_db').join(DB_NAME);
+  const existingDbSchema = stripDatabaseStatements(targetedSchema);
 
   console.log(`Connecting to MySQL at ${process.env.DB_HOST || 'localhost'}:${process.env.DB_PORT || 3306} ...`);
 
-  try {
-    const [results] = await connection.query(sql);
-    const resultSets = Array.isArray(results) ? results.flat() : [results];
-    const message = resultSets.reverse().find((row) => row && row.Message);
+  let connection;
+  let usedExistingDatabase = false;
 
-    await connection.query(`USE \`${DB_NAME.replace(/`/g, '')}\``);
+  try {
+    connection = await mysql.createConnection({ ...baseConfig, database: DB_NAME });
+    usedExistingDatabase = true;
+  } catch (err) {
+    if (err.code !== 'ER_BAD_DB_ERROR') throw err;
+    connection = await mysql.createConnection(baseConfig);
+  }
+
+  try {
+    await connection.query(usedExistingDatabase ? existingDbSchema : targetedSchema);
+    await connection.query(`USE \`${DB_NAME}\``);
     await migrateExistingData(connection);
 
-    console.log(message ? message.Message : 'Database schema loaded successfully.');
+    console.log('Database schema loaded successfully.');
     console.log('Existing duplicate seed data was merged where possible.');
     console.log('Default accounts are created when the server starts for the first time.');
   } finally {
@@ -98,6 +112,6 @@ async function main() {
 
 main().catch((err) => {
   console.error('\nDatabase initialization failed:', err.message);
-  console.error('Make sure MySQL/XAMPP is running and the DB settings in .env are correct.');
+  console.error('Make sure MySQL is running, the database exists (or your user can create it), and .env/host env vars are correct.');
   process.exit(1);
 });

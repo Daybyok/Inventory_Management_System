@@ -13,6 +13,7 @@ const isProduction = process.env.NODE_ENV === 'production';
 
 // ─── APP / SECURITY MIDDLEWARE ──────────────────────────────────────────────
 app.disable('x-powered-by');
+if (isProduction) app.set('trust proxy', 1);
 app.use(express.json({ limit: '1mb' }));
 
 app.use((req, res, next) => {
@@ -29,6 +30,7 @@ const extraOrigins = (process.env.CORS_ORIGINS || '')
 
 function isAllowedOrigin(origin) {
   if (!origin) return true; // same-origin, curl, server-to-server
+  if (extraOrigins.length === 0) return true; // no whitelist configured: allow public API clients
   if (extraOrigins.includes(origin)) return true;
   try {
     const { hostname } = new URL(origin);
@@ -218,6 +220,7 @@ async function connectDB() {
     user: process.env.DB_USER || 'root',
     password: process.env.DB_PASSWORD || '',
     database: process.env.DB_NAME || 'inventory_db',
+    ...(process.env.DB_SSL === 'true' ? { ssl: { rejectUnauthorized: false } } : {}),
     waitForConnections: true,
     connectionLimit: 10,
     decimalNumbers: true,
